@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SoSo Cycles San Francisco Playlist</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    #player {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="player"></div>
+
+  <script>
+    // ─── CONFIGURATION ───────────────────────────────────────────────────────
+    var PLAYLIST_ID = "PLxe5MHY9FeH0aJ3NEMW1pFfkGZbnbeR49";  // San Francisco (SF)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    var player;
+    var watchdogInterval;
+    var bufferStallCount = 0;
+
+    // ─── WATCHDOG ─────────────────────────────────────────────────────────────
+    function startWatchdog() {
+      watchdogInterval = setInterval(function() {
+        if (!player || typeof player.getPlayerState !== "function") return;
+        var state = player.getPlayerState();
+        if (state === 2) {
+          player.playVideo();
+          bufferStallCount = 0;
+        } else if (state === 0) {
+          player.nextVideo();
+          bufferStallCount = 0;
+        } else if (state === 3) {
+          bufferStallCount++;
+          if (bufferStallCount >= 2) { player.nextVideo(); bufferStallCount = 0; }
+        } else if (state === -1 || state === 5) {
+          player.playVideo();
+          bufferStallCount = 0;
+        } else {
+          bufferStallCount = 0;
+        }
+      }, 30000);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Load the YouTube IFrame API
+    var tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+
+    // Called automatically by YouTube once their API script loads
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player("player", {
+        width: "100%",
+        height: "100%",
+        playerVars: {
+          listType:       "playlist",
+          list:           PLAYLIST_ID,
+          autoplay:       1,        // start playing automatically
+          controls:       0,        // hide play/pause controls
+          modestbranding: 1,        // minimal YouTube branding
+          rel:            0,        // don't show related videos at end
+          iv_load_policy: 3,        // hide video annotations
+          showinfo:       0,        // hide video title bar
+          fs:             0,        // hide fullscreen button
+          loop:           1,
+          mute:           1         // muted = browsers allow autoplay
+        },
+        events: {
+          onReady:       onPlayerReady,
+          onStateChange: onPlayerStateChange,
+          onError:       onPlayerError
+        }
+      });
+    }
+
+    function onPlayerReady(event) {
+      event.target.setShuffle(true);
+      event.target.setLoop(true);
+      event.target.mute();
+      event.target.setPlaybackQuality("large");
+
+      // Jump to a random position so every reload starts on a different video
+      var playlist = event.target.getPlaylist();
+      if (playlist && playlist.length > 1) {
+        var randomIndex = Math.floor(Math.random() * playlist.length);
+        event.target.playVideoAt(randomIndex);
+      } else {
+        event.target.playVideo();
+      }
+
+      startWatchdog();
+    }
+
+    function onPlayerStateChange(event) {
+      // YT.PlayerState.ENDED = 0
+      // If somehow the video ends without auto-advancing, push to next
+      if (event.data === YT.PlayerState.ENDED) {
+        player.nextVideo();
+      }
+
+      // YT.PlayerState.CUED = 5 — video loaded but not played, nudge it
+      if (event.data === YT.PlayerState.CUED) {
+        player.playVideo();
+      }
+    }
+
+    function onPlayerError(event) {
+      // If a video errors (private, removed, etc.), skip to the next one
+      // Error codes: 2=bad param, 5=HTML5 error, 100=not found, 101/150=embedding not allowed
+      console.warn("YouTube player error, code:", event.data);
+      setTimeout(function() {
+        player.nextVideo();
+      }, 2000);
+    }
+  </script>
+
+</body>
+</html>
